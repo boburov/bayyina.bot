@@ -1,0 +1,12 @@
+{
+  "channels": [
+    {
+      "channelId": "@boburov_blog"
+    }
+  ],
+  "tokens": {
+    "6846125638": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5ZDI4M2U4MDNmZjFhOGRhN2E3ZDRhYyIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc3NjE5MTEyOSwiZXhwIjoxNzc4NzgzMTI5fQ.JaKSUcbEOFPfHHl1IBxLFuZWOqcJvy1QFhakGYe2ZIs",
+    "8579012114": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5ZDI4M2U4MDNmZjFhOGRhN2E3ZDRhYyIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc3NjE5MTE2MywiZXhwIjoxNzc4NzgzMTYzfQ.91KcOXbq9EqcwAIOc06dXU38aMz_Sjgs1JoWCVFCE7A"
+  },
+  "knownUsers": []
+}

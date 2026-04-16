@@ -1,269 +1,346 @@
-require("dotenv").config();
+require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
-const axios = require('axios');
-const { readDB, writeDB, setToken } = require('./db');
-const { registerLeadsHandlers, handleLeadsCallback, autoCreateLead } = require('./leads');
+const axios       = require('axios');
 
-const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
+const { readDB, writeDB, getToken, setToken } = require('./db');
+const { mainMenuKeyboard, leadActionsKeyboard, paginationKeyboard } = require('./keyboards');
+const { startFlow, cancelFlow, handleCourseSelect, handleGenderSelect, handleText, cancelReminder } = require('./flow');
+const { getLeadsList, getLead, updateLeadStatus, getGroups, fmtStatus, fmtLead } = require('./leads');
 
-const ADMINS = process.env.ADMIN_IDS
-    ? process.env.ADMIN_IDS.split(',').map(Number)
+const bot     = new TelegramBot(process.env.BOT_TOKEN, {
+    polling: { interval: 1000, autoStart: true, params: { timeout: 10 } },
+});
+const BACKEND   = process.env.BACKEND_URL || 'http://156.67.29.62:4000/api';
+const ADMIN_IDS = process.env.ADMIN_IDS
+    ? process.env.ADMIN_IDS.split(',').map(Number).filter(Boolean)
     : [];
-const BACKEND_URL = process.env.BACKEND_URL || 'http://156.67.29.62:4000/api';
 
-// ── Utility ────────────────────────────────────────────────────────────────────
+// ─── Subscription check ───────────────────────────────────────────────────────
 
-function extractUsername(input) {
-    if (input.includes('t.me/')) {
-        return '@' + input.split('t.me/')[1].split('/')[0];
-    }
-    if (input.startsWith('@')) return input;
-    return '@' + input;
-}
-
-// ── Subscription helpers ───────────────────────────────────────────────────────
-
-async function checkAllSubscriptions(userId) {
+async function checkSubscriptions(userId) {
     const db = readDB();
-    if (db.channels.length === 0) return true;
-
-    for (let ch of db.channels) {
+    if (!db.channels || db.channels.length === 0) return true;
+    for (const ch of db.channels) {
         try {
-            const member = await bot.getChatMember(ch.channelId, userId);
-            if (!['member', 'administrator', 'creator'].includes(member.status)) {
-                return false;
-            }
-        } catch (err) {
-            return false;
-        }
+            const m = await bot.getChatMember(ch.channelId, userId);
+            if (!['member', 'administrator', 'creator'].includes(m.status)) return false;
+        } catch { return false; }
     }
     return true;
 }
 
-// ── Help / menu ────────────────────────────────────────────────────────────────
-
-bot.onText(/\/help|\/commands|\/menu/, (msg) => {
-    const chatId = msg.chat.id;
-    const userId = msg.from.id;
-
-    if (!ADMINS.includes(userId)) {
-        return bot.sendMessage(chatId,
-            "👤 Oddiy foydalanuvchi buyruqlari:\n\n" +
-            "/start - Botni ishga tushirish\n" +
-            "Hisobga kirish uchun: +99890xxxxxxx parol"
-        );
-    }
-
-    const adminHelp = `
-🛠 <b>Admin Buyruqlari</b>
-
-📌 Asosiy buyruqlar:
-• /start - Botni boshlash
-• /help yoki /menu - Ushbu menyuni ko'rish
-
-📢 Kanal boshqarish:
-• /add https://t.me/kanalusername - Kanal qo'shish
-• /remove @kanalusername - Kanalni o'chirish
-• /list - Barcha kanallarni ko'rish
-
-👥 Lead boshqarish (login kerak):
-• /leads - Leadlar ro'yxati
-• /leads 2 - 2-sahifani ko'rish
-
-🔍 Misol:
- /add https://t.me/maktabkanal
- /remove @maktabkanal
-    `.trim();
-
-    bot.sendMessage(chatId, adminHelp, { parse_mode: 'HTML' });
-});
-
-// ── /start (with optional deep-link for referral tracking) ────────────────────
+// ─── /start ───────────────────────────────────────────────────────────────────
 
 bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
-    const chatId = msg.chat.id;
-    const userId = msg.from.id;
+    const chatId   = msg.chat.id;
+    const userId   = msg.from.id;
     const deepLink = match[1]?.trim() || null;
 
-    // 1. Silently create lead for first-time users
-    await autoCreateLead(msg);
-
-    // 2. Track referral / unique link if present
     if (deepLink) {
-        axios.get(`${BACKEND_URL}/leads/track/${encodeURIComponent(deepLink)}`)
-            .catch(() => { }); // tracking failures must never disrupt UX
+        axios.get(`${BACKEND}/leads/track/${encodeURIComponent(deepLink)}`).catch(() => {});
     }
 
-    // 3. Subscription gate
-    const isSubscribed = await checkAllSubscriptions(userId);
-
-    if (!isSubscribed) {
+    const isSub = await checkSubscriptions(userId);
+    if (!isSub) {
         const db = readDB();
-        const buttons = db.channels.map(ch => [{
+        const buttons = (db.channels || []).map(ch => [{
             text: `📢 ${ch.channelId}`,
-            url: `https://t.me/${ch.channelId.replace('@', '')}`
+            url:  `https://t.me/${ch.channelId.replace('@', '')}`,
         }]);
-        buttons.push([{ text: "✅ Obunani tekshirish", callback_data: "check_sub" }]);
-
+        buttons.push([{ text: '✅ Obunani tekshirish', callback_data: 'check_sub' }]);
         return bot.sendMessage(chatId,
-            "👋 Xush kelibsiz!\n\n" +
-            "Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling:",
+            '👋 Xush kelibsiz!\n\nBotdan foydalanish uchun quyidagi kanallarga obuna bo\'ling:',
             { reply_markup: { inline_keyboard: buttons } }
         );
     }
 
-    // 4. Subscribed → main menu
-    const keyboard = [
-        [{ text: "🚀 Mini Ilovani Ochish", web_app: { url: "https://student.bayyina.uz" } }],
-        [{ text: "🔑 Hisobga Kirish", callback_data: "login_start" }]
-    ];
-
-    bot.sendMessage(chatId, "✅ Obuna tasdiqlandi!\nBotdan to'liq foydalanishingiz mumkin.", {
-        reply_markup: { inline_keyboard: keyboard }
-    });
+    bot.sendMessage(chatId,
+        '🎓 <b>Bayyina Ta\'lim Markazi</b>\n\n' +
+        'Salom! Kurslarimizdan biriga yozilish uchun quyidagi tugmani bosing.',
+        { parse_mode: 'HTML', reply_markup: mainMenuKeyboard() }
+    );
 });
 
-// ── Callback queries ───────────────────────────────────────────────────────────
+// ─── /help ────────────────────────────────────────────────────────────────────
+
+bot.onText(/\/help|\/menu|\/commands/, (msg) => {
+    const chatId  = msg.chat.id;
+    const isAdmin = ADMIN_IDS.includes(msg.from.id);
+
+    if (!isAdmin) {
+        return bot.sendMessage(chatId,
+            '📋 <b>Buyruqlar:</b>\n\n/start — Botni boshlash\n/help  — Yordam',
+            { parse_mode: 'HTML' }
+        );
+    }
+
+    bot.sendMessage(chatId,
+        '🛠 <b>Admin buyruqlari:</b>\n\n' +
+        '/leads         — Leadlar ro\'yxati\n' +
+        '/add &lt;url&gt;  — Kanal qo\'shish\n' +
+        '/remove @kanal — Kanal o\'chirish\n' +
+        '/list          — Kanallar ro\'yxati',
+        { parse_mode: 'HTML' }
+    );
+});
+
+// ─── /leads ───────────────────────────────────────────────────────────────────
+
+bot.onText(/^\/leads(?:\s+(\d+))?$/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    if (!ADMIN_IDS.includes(msg.from.id)) return;
+    const token = getToken(String(msg.from.id));
+    if (!token) {
+        return bot.sendMessage(chatId, '❌ Avval tizimga kiring:\n`+998901234567 parol`', { parse_mode: 'Markdown' });
+    }
+    const page = parseInt(match[1], 10) || 1;
+    await sendLeadsList(chatId, msg.from.id, page);
+});
+
+async function sendLeadsList(chatId, fromId, page = 1) {
+    const result = await getLeadsList(String(fromId), page);
+    if (!result.success) {
+        return bot.sendMessage(chatId, `❌ ${result.error === 'no_token' ? 'Avval tizimga kiring.' : result.error}`);
+    }
+    if (!result.leads.length) return bot.sendMessage(chatId, '📭 Leadlar topilmadi.');
+
+    let text = `📋 <b>Leadlar</b> (${page}/${result.pages})\n\n`;
+    const buttons = result.leads.map((lead, i) => {
+        text += `${(page - 1) * 8 + i + 1}. <b>${lead.firstName}</b> — ${fmtStatus(lead.status)}\n`;
+        return [{ text: `👤 ${lead.firstName}`, callback_data: `lead_view_${lead._id}` }];
+    });
+
+    const nav = paginationKeyboard(page, result.pages);
+    if (nav) buttons.push(...nav.inline_keyboard);
+
+    bot.sendMessage(chatId, text, { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } });
+}
+
+// ─── Callback queries ─────────────────────────────────────────────────────────
 
 bot.on('callback_query', async (query) => {
-    const userId = query.from.id;
-    const chatId = query.message.chat.id;
-    const data = query.data;
+    const data       = query.data;
+    const chatId     = query.message.chat.id;
+    const userId     = query.from.id;
+    const telegramId = String(userId);
 
-    // Delegate leads callbacks first
-    const handledByLeads = await handleLeadsCallback(bot, query);
-    if (handledByLeads) return;
-
+    // ── Subscription check ────────────────────────────────────────────────────
     if (data === 'check_sub') {
-        const isSub = await checkAllSubscriptions(userId);
-        if (isSub) {
-            bot.sendMessage(chatId, "✅ Obuna tasdiqlandi! Endi foydalanishingiz mumkin.");
+        const ok = await checkSubscriptions(userId);
+        if (ok) {
+            bot.answerCallbackQuery(query.id, { text: '✅ Obuna tasdiqlandi!' });
+            bot.sendMessage(chatId, '✅ Obuna tasdiqlandi!', { reply_markup: mainMenuKeyboard() });
         } else {
-            bot.answerCallbackQuery(query.id, {
-                text: "❌ Hali barcha kanallarga obuna bo'lmadingiz!",
-                show_alert: true,
-            });
+            bot.answerCallbackQuery(query.id, { text: '❌ Hali barcha kanallarga obuna bo\'lmadingiz!', show_alert: true });
         }
         return;
     }
 
-    if (data === 'login_start') {
-        bot.sendMessage(chatId,
-            "📱 Hisobga kirish uchun telefon raqam va parolingizni yuboring:\n\n" +
-            "Format:\n`+998901234567 secret123`",
-            { parse_mode: 'Markdown' }
-        );
+    // ── Lead registration flow ────────────────────────────────────────────────
+    if (data === 'flow_courses') {
+        bot.answerCallbackQuery(query.id);
+        startFlow(bot, chatId, telegramId);
+        return;
     }
+    if (data.startsWith('flow_course_')) {
+        handleCourseSelect(bot, query, telegramId, data.replace('flow_course_', ''));
+        return;
+    }
+    if (data.startsWith('flow_gender_')) {
+        handleGenderSelect(bot, query, telegramId, data.replace('flow_gender_', ''));
+        return;
+    }
+    if (data === 'flow_cancel') {
+        bot.answerCallbackQuery(query.id);
+        cancelFlow(bot, chatId, telegramId);
+        return;
+    }
+
+    // ── Admin-only callbacks ──────────────────────────────────────────────────
+    if (!ADMIN_IDS.includes(userId)) return bot.answerCallbackQuery(query.id);
+
+    const token = getToken(telegramId);
+    if (!token && (data.startsWith('lead_') || data.startsWith('leads_'))) {
+        return bot.answerCallbackQuery(query.id, { text: '❌ Avval tizimga kiring!', show_alert: true });
+    }
+
+    if (data.startsWith('leads_list_')) {
+        const page = parseInt(data.replace('leads_list_', ''), 10) || 1;
+        bot.answerCallbackQuery(query.id);
+        await bot.deleteMessage(chatId, query.message.message_id).catch(() => {});
+        await sendLeadsList(chatId, userId, page);
+        return;
+    }
+
+    if (data.startsWith('lead_view_')) {
+        const leadId = data.replace('lead_view_', '');
+        const result = await getLead(leadId, telegramId);
+        bot.answerCallbackQuery(query.id);
+        if (!result.success) return bot.sendMessage(chatId, '❌ Lead topilmadi.');
+        bot.editMessageText(fmtLead(result.lead), {
+            chat_id: chatId, message_id: query.message.message_id,
+            parse_mode: 'HTML',
+            reply_markup: leadActionsKeyboard(leadId),
+        });
+        return;
+    }
+
+    if (data.startsWith('lead_status_')) {
+        const parts  = data.replace('lead_status_', '').split('_');
+        const status = parts.pop();
+        const leadId = parts.join('_');
+        const result = await updateLeadStatus(leadId, status, telegramId);
+        if (result.success) {
+            bot.answerCallbackQuery(query.id, { text: `✅ ${fmtStatus(status)}` });
+            if (status === 'contacted') cancelReminder(leadId);
+            const fresh = await getLead(leadId, telegramId);
+            if (fresh.success) {
+                bot.editMessageText(fmtLead(fresh.lead), {
+                    chat_id: chatId, message_id: query.message.message_id,
+                    parse_mode: 'HTML',
+                    reply_markup: leadActionsKeyboard(leadId),
+                });
+            }
+        } else {
+            bot.answerCallbackQuery(query.id, { text: '❌ Xatolik', show_alert: true });
+        }
+        return;
+    }
+
+    bot.answerCallbackQuery(query.id);
 });
 
-// ── Login (text message) ───────────────────────────────────────────────────────
+// ─── Text messages ────────────────────────────────────────────────────────────
 
 bot.on('message', async (msg) => {
     if (!msg.text || msg.text.startsWith('/')) return;
 
-    const chatId = msg.chat.id;
-    const text = msg.text.trim();
+    const chatId     = msg.chat.id;
+    const telegramId = String(msg.from.id);
+    const text       = msg.text.trim();
 
-    // Silently create lead for first-time text senders
-    autoCreateLead(msg).catch(() => { });
+    // Lead flow
+    const handled = await handleText(bot, msg);
+    if (handled) return;
 
-    // Detect phone + password format
-    const match = text.match(/^(\+?998\d{9})\s+(.+)$/);
-    if (!match) return;
-
-    const phone = match[1].replace('+', '');
-    const password = match[2];
-
-    try {
-        const response = await axios.post(`${BACKEND_URL}/auth/login`, {
-            phone: Number(phone),
-            password,
-            telegramId: msg.from.id.toString(),
-        });
-
-        const { token, user, message } = response.data;
-
-        if (response.data.code === "loginSuccess") {
-            // Persist JWT so protected API calls (leads, etc.) can use it
-            setToken(String(msg.from.id), token);
-
-            bot.sendMessage(chatId,
-                `✅ ${message}\n\n` +
-                `👤 ${user.firstName} ${user.lastName}\n` +
-                `🎓 Rol: ${user.role}\n` +
-                `🔑 Token muvaffaqiyatli saqlandi!\n\n` +
-                `📋 Leadlarni ko'rish uchun /leads buyrug'ini yuboring.`,
-                { parse_mode: 'HTML' }
-            );
-        } else {
-            bot.sendMessage(chatId, "❌ Login muvaffaqiyatsiz: " + message);
+    // Admin login: +998901234567 parol
+    const loginMatch = text.match(/^(\+?998\d{9})\s+(\S+)$/);
+    if (loginMatch) {
+        const phone    = loginMatch[1].replace('+', '');
+        const password = loginMatch[2];
+        try {
+            const res = await axios.post(`${BACKEND}/auth/login`, {
+                phone:      Number(phone),
+                password,
+                telegramId,
+            });
+            if (res.data.code === 'loginSuccess') {
+                setToken(telegramId, res.data.token);
+                bot.sendMessage(chatId,
+                    `✅ Xush kelibsiz, <b>${res.data.user.firstName}</b>!\n\n` +
+                    `Leadlarni ko'rish: /leads`,
+                    { parse_mode: 'HTML' }
+                );
+            } else {
+                bot.sendMessage(chatId, '❌ Login muvaffaqiyatsiz: ' + res.data.message);
+            }
+        } catch (err) {
+            bot.sendMessage(chatId, '❌ ' + (err.response?.data?.message || err.message));
         }
-    } catch (err) {
-        console.error(err.response?.data || err.message);
-        bot.sendMessage(chatId, err.message);
     }
 });
 
-// ── Admin: channel management ──────────────────────────────────────────────────
+// ─── Channel management ───────────────────────────────────────────────────────
+
+function extractUsername(input) {
+    if (input.includes('t.me/')) return '@' + input.split('t.me/')[1].split('/')[0];
+    if (input.startsWith('@')) return input;
+    return '@' + input;
+}
 
 bot.onText(/^\/add(?:\s+(.+))?$/, async (msg, match) => {
-    if (!ADMINS.includes(msg.from.id)) return bot.sendMessage(msg.chat.id, "❌ Siz admin emassiz!");
-
+    if (!ADMIN_IDS.includes(msg.from.id)) return;
     const url = match[1];
-    if (!url) return bot.sendMessage(msg.chat.id, "❌ /add https://t.me/kanal");
-
+    if (!url) return bot.sendMessage(msg.chat.id, 'Format: /add https://t.me/kanal');
     try {
         const channelId = extractUsername(url);
-
-        const chat = await bot.getChat(channelId);
-        await bot.sendMessage(msg.chat.id, `✅ Kanal topildi: ${chat.title || channelId}\nBotni admin qilganingizga ishonch hosil qiling!`);
-
+        await bot.getChat(channelId);
         const db = readDB();
         if (db.channels.some(c => c.channelId === channelId)) {
-            return bot.sendMessage(msg.chat.id, "⚠️ Bu kanal allaqachon qo'shilgan!");
+            return bot.sendMessage(msg.chat.id, '⚠️ Allaqachon qo\'shilgan.');
         }
-
         db.channels.push({ channelId });
         writeDB(db);
-
-        bot.sendMessage(msg.chat.id, `✅ Kanal muvaffaqiyatli qo'shildi: ${channelId}`);
-    } catch (e) {
-        bot.sendMessage(msg.chat.id, "❌ Kanal topilmadi yoki bot admin emas!");
+        bot.sendMessage(msg.chat.id, `✅ Kanal qo\'shildi: ${channelId}`);
+    } catch {
+        bot.sendMessage(msg.chat.id, '❌ Kanal topilmadi yoki bot admin emas!');
     }
 });
 
-bot.onText(/^\/remove\s+(.+)$/, async (msg, match) => {
-    const userId = msg.from.id;
-    const chatId = msg.chat.id;
-
-    if (!ADMINS.includes(userId)) {
-        return bot.sendMessage(chatId, "❌ Siz admin emassiz!");
-    }
-
+bot.onText(/^\/remove\s+(.+)$/, (msg, match) => {
+    if (!ADMIN_IDS.includes(msg.from.id)) return;
     const channelId = extractUsername(match[1].trim());
     const db = readDB();
-    const exists = db.channels.find(c => c.channelId === channelId);
-
-    if (!exists) {
-        return bot.sendMessage(chatId, `⚠️ Bu kanal topilmadi: ${channelId}`);
-    }
-
+    const before = db.channels.length;
     db.channels = db.channels.filter(c => c.channelId !== channelId);
     writeDB(db);
-
-    bot.sendMessage(chatId, `🗑 Kanal muvaffaqiyatli o'chirildi:\n<b>${channelId}</b>`, {
-        parse_mode: 'HTML'
-    });
+    bot.sendMessage(msg.chat.id, db.channels.length < before
+        ? `🗑 Kanal o\'chirildi: ${channelId}`
+        : `⚠️ Topilmadi: ${channelId}`);
 });
 
-bot.onText(/\/list/, (msg) => {
-    if (!ADMINS.includes(msg.from.id)) return;
+bot.onText(/^\/list$/, (msg) => {
+    if (!ADMIN_IDS.includes(msg.from.id)) return;
     const db = readDB();
-    if (db.channels.length === 0) return bot.sendMessage(msg.chat.id, "📭 Hozircha kanal yo'q");
-
-    const text = db.channels.map(c => `• ${c.channelId}`).join('\n');
-    bot.sendMessage(msg.chat.id, `📢 Qo'shilgan kanallar:\n\n${text}`);
+    if (!db.channels.length) return bot.sendMessage(msg.chat.id, '📭 Kanallar yo\'q');
+    bot.sendMessage(msg.chat.id, '📢 Kanallar:\n' + db.channels.map(c => `• ${c.channelId}`).join('\n'));
 });
 
-// ── Register leads /leads command ──────────────────────────────────────────────
-registerLeadsHandlers(bot);
+// ─── Command suggestions ──────────────────────────────────────────────────────
+
+const USER_COMMANDS = [
+    { command: 'start', description: '🏠 Bosh menyu' },
+    { command: 'help',  description: '📋 Yordam' },
+];
+
+const ADMIN_COMMANDS = [
+    { command: 'start',  description: '🏠 Bosh menyu' },
+    { command: 'help',   description: '📋 Yordam' },
+    { command: 'leads',  description: '📥 Leadlar ro\'yxati' },
+    { command: 'list',   description: '📢 Kanallar ro\'yxati' },
+    { command: 'add',    description: '➕ Kanal qo\'shish' },
+    { command: 'remove', description: '🗑 Kanal o\'chirish' },
+];
+
+bot.getMe().then(() => {
+    bot.setMyCommands(USER_COMMANDS).catch(() => {});
+    for (const adminId of ADMIN_IDS) {
+        bot.setMyCommands(ADMIN_COMMANDS, {
+            scope: { type: 'chat', chat_id: adminId },
+        }).catch(() => {});
+    }
+});
+
+// ─── Error handlers ───────────────────────────────────────────────────────────
+
+let _restarting = false;
+bot.on('polling_error', (err) => {
+    console.error(`[polling_error] ${err.code ?? 'ERR'}: ${err.message}`);
+    if (err.code === 'EFATAL' && !_restarting) {
+        _restarting = true;
+        bot.stopPolling().finally(() => {
+            setTimeout(() => {
+                _restarting = false;
+                bot.startPolling().catch((e) => console.error('Restart xatosi:', e.message));
+            }, 5000);
+        });
+    }
+});
+
+bot.on('error', (err) => console.error('[bot_error]', err.message));
+
+process.on('unhandledRejection', (reason) => {
+    console.error('[unhandledRejection]', reason instanceof Error ? reason.message : String(reason));
+});
+
+console.log('🤖 Bayyina Bot ishga tushdi...');

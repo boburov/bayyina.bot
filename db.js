@@ -33,6 +33,13 @@ function setToken(telegramId, token) {
     writeDB(db);
 }
 
+/** Return any stored token (used as service token when BOT_SERVICE_TOKEN is not set). */
+function getAnyAdminToken() {
+    const db = readDB();
+    const tokens = Object.values(db.tokens || {});
+    return tokens.length > 0 ? tokens[0] : null;
+}
+
 // ── Known-lead helpers ─────────────────────────────────────────────────────────
 
 /** Return true if we already created (or confirmed) a lead for this user. */
@@ -51,4 +58,4 @@ function markKnownLead(telegramId) {
     }
 }
 
-module.exports = { readDB, writeDB, getToken, setToken, isKnownLead, markKnownLead };
+module.exports = { readDB, writeDB, getToken, setToken, getAnyAdminToken, isKnownLead, markKnownLead };

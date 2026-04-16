@@ -21,7 +21,12 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon index.js"
+    "dev": "nodemon --ignore db.json --ignore '*.json' index.js"
+  },
+  "nodemonConfig": {
+    "ignore": ["db.json", "*.json"],
+    "watch": ["*.js"],
+    "ext": "js"
   },
   "dependencies": {
     "axios": "^1.15.0",

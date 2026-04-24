@@ -1,32 +1,51 @@
+const fs = require('fs');
+
 /**
  * keyboards.js — All Telegram inline keyboard builders for the Bayyina bot.
  */
 
+function getCourses() {
+    try {
+        const data = fs.readFileSync('./data/courses.json', 'utf8');
+        return JSON.parse(data);
+    } catch (e) {
+        return [];
+    }
+}
+
 // ─── Main menu ──────────────────────────────────────────────────────────────
 
-function mainMenuKeyboard() {
-    return {
-        inline_keyboard: [
-            [{ text: '📚 Kurs tanlash va yozilish', callback_data: 'flow_courses' }],
-            [{ text: '🚀 Shaxsiy kabinetni ochish', web_app: { url: process.env.STUDENT_APP_URL || 'https://student.bayyina.uz' } }],
-            [{ text: '🔑 Hisobga kirish', callback_data: 'login_start' }],
-        ],
-    };
+function mainMenuKeyboard(role = null, isAdmin = false) {
+    const kb = [
+        [{ text: '📚 Kurs tanlash va yozilish', callback_data: 'flow_courses' }]
+    ];
+
+    if (role) {
+        const panelUrls = {
+            admin:   process.env.ADMIN_APP_URL || 'https://admin.bayyina.uz',
+            teacher: process.env.TEACHER_APP_URL || 'https://teacher.bayyina.uz',
+            student: process.env.STUDENT_APP_URL || 'https://student.bayyina.uz'
+        };
+        kb.push([{ text: '🌐 Shaxsiy kabinet', web_app: { url: panelUrls[role] || panelUrls.student } }]);
+    } else {
+        kb.push([{ text: '🔑 CRM ga kirish', callback_data: 'crm_login_start' }]);
+    }
+
+    if (isAdmin) {
+        kb.push([{ text: '🛠 Kurslarni boshqarish', callback_data: 'admin_courses_mgmt' }]);
+    }
+
+    if (role) {
+        kb.push([{ text: '🚪 Chiqish', callback_data: 'crm_logout' }]);
+    }
+
+    return { inline_keyboard: kb };
 }
 
 // ─── Course selection ────────────────────────────────────────────────────────
 
-const COURSES = [
-    { id: 'english_morning',  label: '🌅 Ingliz tili (Ertalab)' },
-    { id: 'english_evening',  label: '🌆 Ingliz tili (Kechqurun)' },
-    { id: 'ielts',            label: '📊 IELTS tayyorlov' },
-    { id: 'it_basics',        label: '💻 IT asoslari' },
-    { id: 'russian',          label: '🇷🇺 Rus tili' },
-    { id: 'math',             label: '📐 Matematika' },
-    { id: 'other',            label: '📋 Boshqa kurs' },
-];
-
 function coursesKeyboard() {
+    const COURSES = getCourses();
     const rows = [];
     for (let i = 0; i < COURSES.length; i += 2) {
         const row = [{ text: COURSES[i].label, callback_data: `flow_course_${COURSES[i].id}` }];
@@ -39,7 +58,19 @@ function coursesKeyboard() {
     return { inline_keyboard: rows };
 }
 
-// ─── Gender ──────────────────────────────────────────────────────────────────
+// ─── Admin Course Management ─────────────────────────────────────────────────
+
+function adminCoursesKeyboard() {
+    const COURSES = getCourses();
+    const rows = COURSES.map(c => [
+        { text: `🗑 ${c.label}`, callback_data: `admin_course_del_${c.id}` }
+    ]);
+    rows.push([{ text: '➕ Kurs qo\'shish', callback_data: 'admin_course_add' }]);
+    rows.push([{ text: '◀️ Orqaga', callback_data: 'admin_back' }]);
+    return { inline_keyboard: rows };
+}
+
+// ─── Others ──────────────────────────────────────────────────────────────────
 
 function genderKeyboard() {
     return {
@@ -53,33 +84,11 @@ function genderKeyboard() {
     };
 }
 
-// ─── Source ──────────────────────────────────────────────────────────────────
-
-function sourceKeyboard() {
-    return {
-        inline_keyboard: [
-            [
-                { text: '📸 Instagram',    callback_data: 'flow_source_instagram' },
-                { text: '✈️ Telegram',     callback_data: 'flow_source_telegram' },
-            ],
-            [
-                { text: '👥 Do\'st orqali', callback_data: 'flow_source_referral' },
-                { text: '🌍 Boshqa',        callback_data: 'flow_source_other' },
-            ],
-            [{ text: '❌ Bekor qilish', callback_data: 'flow_cancel' }],
-        ],
-    };
-}
-
-// ─── Cancel-only ─────────────────────────────────────────────────────────────
-
 function cancelKeyboard() {
     return {
         inline_keyboard: [[{ text: '❌ Bekor qilish', callback_data: 'flow_cancel' }]],
     };
 }
-
-// ─── Admin lead actions ───────────────────────────────────────────────────────
 
 function leadActionsKeyboard(leadId) {
     return {
@@ -105,11 +114,11 @@ function paginationKeyboard(page, totalPages) {
 }
 
 module.exports = {
-    COURSES,
+    getCourses,
     mainMenuKeyboard,
     coursesKeyboard,
+    adminCoursesKeyboard,
     genderKeyboard,
-    sourceKeyboard,
     cancelKeyboard,
     leadActionsKeyboard,
     paginationKeyboard,

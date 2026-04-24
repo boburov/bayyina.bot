@@ -1,11 +1,11 @@
 const fs = require('fs');
 const DB_FILE = './db.json';
+const SESSIONS_FILE = './data/sessions.json';
 
 function readDB() {
     try {
         const data = fs.readFileSync(DB_FILE, 'utf8');
         const parsed = JSON.parse(data);
-        // Ensure all fields exist (backwards-compat with old db.json)
         if (!parsed.tokens)     parsed.tokens     = {};
         if (!parsed.knownUsers) parsed.knownUsers = [];
         return parsed;
@@ -18,23 +18,63 @@ function writeDB(data) {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 }
 
-// ── Token helpers ──────────────────────────────────────────────────────────────
+// ── Sessions (token + role) ──────────────────────────────────────────────────
 
-/** Return the stored JWT for a Telegram user, or null. */
+function getSessions() {
+    try {
+        if (!fs.existsSync(SESSIONS_FILE)) return {};
+        const data = fs.readFileSync(SESSIONS_FILE, 'utf8');
+        return JSON.parse(data);
+    } catch (e) {
+        return {};
+    }
+}
+
+function saveSessions(sessions) {
+    if (!fs.existsSync('./data')) fs.mkdirSync('./data');
+    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(sessions, null, 2));
+}
+
+function getSession(telegramId) {
+    const s = getSessions();
+    return s[String(telegramId)] || null;
+}
+
+function saveSession(telegramId, data) {
+    const s = getSessions();
+    s[String(telegramId)] = {
+        token: data.token,
+        role:  data.role || 'student',
+        updatedAt: new Date().toISOString()
+    };
+    saveSessions(s);
+}
+
+function removeSession(telegramId) {
+    const s = getSessions();
+    delete s[String(telegramId)];
+    saveSessions(s);
+}
+
+// ── Token helpers (Legacy Support) ───────────────────────────────────────────
+
 function getToken(telegramId) {
+    const session = getSession(telegramId);
+    if (session) return session.token;
+    
     const db = readDB();
     return db.tokens[String(telegramId)] || null;
 }
 
-/** Persist a JWT for a Telegram user. */
-function setToken(telegramId, token) {
-    const db = readDB();
-    db.tokens[String(telegramId)] = token;
-    writeDB(db);
+function setToken(telegramId, token, role = 'student') {
+    saveSession(telegramId, { token, role });
 }
 
-/** Return any stored token (used as service token when BOT_SERVICE_TOKEN is not set). */
 function getAnyAdminToken() {
+    const sessions = getSessions();
+    for (const s of Object.values(sessions)) {
+        if (s.role === 'admin' || s.role === 'teacher') return s.token;
+    }
     const db = readDB();
     const tokens = Object.values(db.tokens || {});
     return tokens.length > 0 ? tokens[0] : null;
@@ -42,13 +82,11 @@ function getAnyAdminToken() {
 
 // ── Known-lead helpers ─────────────────────────────────────────────────────────
 
-/** Return true if we already created (or confirmed) a lead for this user. */
 function isKnownLead(telegramId) {
     const db = readDB();
     return db.knownUsers.includes(String(telegramId));
 }
 
-/** Mark a Telegram user as having a lead in the backend. */
 function markKnownLead(telegramId) {
     const db = readDB();
     const id = String(telegramId);
@@ -58,4 +96,9 @@ function markKnownLead(telegramId) {
     }
 }
 
-module.exports = { readDB, writeDB, getToken, setToken, getAnyAdminToken, isKnownLead, markKnownLead };
+module.exports = { 
+    readDB, writeDB, 
+    getToken, setToken, 
+    getSession, saveSession, removeSession,
+    getAnyAdminToken, isKnownLead, markKnownLead 
+};

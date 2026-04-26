@@ -11,8 +11,8 @@ require('dotenv').config();
 const axios = require('axios');
 const { getToken, getAnyAdminToken } = require('./db');
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://156.67.29.62:4000/api';
-const PAGE_SIZE   = 8;
+const BACKEND_URL = process.env.BACKEND_URL || 'http://api.bayyina.org.uz/api';
+const PAGE_SIZE = 8;
 
 // ─── Axios factory ────────────────────────────────────────────────────────────
 
@@ -43,14 +43,14 @@ async function createLead(data, botTelegramId) {
     const token = serviceToken(botTelegramId);
 
     const payload = {
-        firstName:  data.firstName,
-        phone:      data.phone ? Number(String(data.phone).replace(/\D/g, '')) : undefined,
+        firstName: data.firstName,
+        phone: data.phone ? Number(String(data.phone).replace(/\D/g, '')) : undefined,
         telegramId: String(data.telegramId),
-        gender:     data.gender,
-        age:        data.age ? Number(data.age) : undefined,
+        gender: data.gender,
+        age: data.age ? Number(data.age) : undefined,
         profession: data.profession,
-        source:     data.source   || 'telegram',
-        interest:   data.interest,
+        source: data.source || 'telegram',
+        interest: data.interest,
         uniqueLink: data.uniqueLink,
     };
 
@@ -97,9 +97,9 @@ async function getLeadsList(telegramId, page = 1, filters = {}) {
         const data = res.data;
         return {
             success: true,
-            leads:   data.leads || [],
-            total:   data.total || 0,
-            pages:   data.pages || 1,
+            leads: data.leads || [],
+            total: data.total || 0,
+            pages: data.pages || 1,
         };
     } catch (err) {
         return { success: false, error: err.response?.data?.message || err.message };
@@ -136,12 +136,12 @@ async function getGroups(telegramId) {
 
 function fmtStatus(status) {
     return {
-        new:        '🆕 Yangi',
-        contacted:  '📞 Bog\'lashildi',
+        new: '🆕 Yangi',
+        contacted: '📞 Bog\'lashildi',
         interested: '💡 Qiziqyapti',
-        scheduled:  '📅 Rejalashtirildi',
-        rejected:   '❌ Rad etildi',
-        converted:  '🎓 Qabul qilindi',
+        scheduled: '📅 Rejalashtirildi',
+        rejected: '❌ Rad etildi',
+        converted: '🎓 Qabul qilindi',
     }[status] || status;
 }
 

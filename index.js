@@ -1,7 +1,7 @@
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
-const axios       = require('axios');
-const fs          = require('fs');
+const axios = require('axios');
+const fs = require('fs');
 
 const { readDB, writeDB, getToken, setToken, getSession, saveSession, removeSession } = require('./db');
 const { mainMenuKeyboard, adminCoursesKeyboard, leadActionsKeyboard, paginationKeyboard, cancelKeyboard } = require('./keyboards');
@@ -12,13 +12,13 @@ const bot = new TelegramBot(process.env.BOT_TOKEN, {
     polling: { interval: 1000, autoStart: true, params: { timeout: 10 } },
 });
 
-const BACKEND   = process.env.BACKEND_URL || 'http://156.67.29.62:4000/api';
+const BACKEND = process.env.BACKEND_URL || 'http://api.bayyina.org.uz/api';
 const ADMIN_IDS = process.env.ADMIN_IDS
     ? process.env.ADMIN_IDS.split(',').map(Number).filter(Boolean)
     : [];
 
-const loginStates = new Map(); 
-const adminStates = new Map(); 
+const loginStates = new Map();
+const adminStates = new Map();
 
 // ─── Subscription check ───────────────────────────────────────────────────────
 
@@ -38,7 +38,7 @@ async function forceSub(chatId, userId) {
     const db = readDB();
     const buttons = (db.channels || []).map(ch => [{
         text: `📢 ${ch.channelId}`,
-        url:  `https://t.me/${ch.channelId.replace('@', '')}`,
+        url: `https://t.me/${ch.channelId.replace('@', '')}`,
     }]);
     buttons.push([{ text: '✅ Obunani tekshirish', callback_data: 'check_sub' }]);
     await bot.sendMessage(chatId,
@@ -63,12 +63,12 @@ function saveCourses(courses) {
 // ─── /start ───────────────────────────────────────────────────────────────────
 
 bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
-    const chatId   = msg.chat.id;
-    const userId   = msg.from.id;
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
     const deepLink = match[1]?.trim() || null;
 
     if (deepLink) {
-        axios.get(`${BACKEND}/leads/track/${encodeURIComponent(deepLink)}`).catch(() => {});
+        axios.get(`${BACKEND}/leads/track/${encodeURIComponent(deepLink)}`).catch(() => { });
     }
 
     const isSub = await checkSubscriptions(userId);
@@ -120,7 +120,7 @@ bot.onText(/\/list/, async (msg) => {
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
-    const text   = msg.text;
+    const text = msg.text;
 
     if (!text || text.startsWith('/')) return;
 
@@ -177,14 +177,14 @@ bot.on('message', async (msg) => {
 bot.on('callback_query', async (query) => {
     const chatId = query.message.chat.id;
     const userId = query.from.id;
-    const data   = query.data;
+    const data = query.data;
 
     // Exception for check_sub
     if (data === 'check_sub') {
         const isSub = await checkSubscriptions(userId);
         if (isSub) {
             bot.answerCallbackQuery(query.id, { text: '✅ Rahmat!' });
-            bot.deleteMessage(chatId, query.message.message_id).catch(() => {});
+            bot.deleteMessage(chatId, query.message.message_id).catch(() => { });
             const session = getSession(userId);
             const isAdmin = ADMIN_IDS.includes(userId);
             return bot.sendMessage(chatId, '🎓 <b>Bayyina Ta\'lim Markazi</b>', { reply_markup: mainMenuKeyboard(session?.role, isAdmin) });
@@ -208,7 +208,7 @@ bot.on('callback_query', async (query) => {
         bot.answerCallbackQuery(query.id);
         loginStates.delete(chatId);
         adminStates.delete(chatId);
-        bot.deleteMessage(chatId, query.message.message_id).catch(() => {});
+        bot.deleteMessage(chatId, query.message.message_id).catch(() => { });
         return cancelFlow(bot, chatId, userId);
     }
 
@@ -247,7 +247,7 @@ bot.on('callback_query', async (query) => {
 
     if (data === 'admin_back') {
         bot.answerCallbackQuery(query.id);
-        bot.deleteMessage(chatId, query.message.message_id).catch(() => {});
+        bot.deleteMessage(chatId, query.message.message_id).catch(() => { });
         const session = getSession(userId);
         const isAdmin = ADMIN_IDS.includes(userId);
         return bot.sendMessage(chatId, '🎓 <b>Asosiy menyu</b>', { reply_markup: mainMenuKeyboard(session?.role, isAdmin) });
@@ -262,7 +262,7 @@ bot.on('callback_query', async (query) => {
     }
 
     if (data.startsWith('lead_status_')) {
-        const [,, leadId, status] = data.split('_');
+        const [, , leadId, status] = data.split('_');
         const res = await updateLeadStatus(leadId, status, userId);
         if (res.success) {
             bot.answerCallbackQuery(query.id, { text: '✅' });

@@ -22,9 +22,7 @@ function mainMenuKeyboard(role = null, isAdmin = false) {
 
     if (role) {
         const panelUrls = {
-            admin:   process.env.ADMIN_APP_URL || 'https://admin.bayyina.uz',
-            teacher: process.env.TEACHER_APP_URL || 'https://teacher.bayyina.uz',
-            student: process.env.STUDENT_APP_URL || 'https://student.bayyina.uz'
+            student: 'https://student.bayyina.org.uz'
         };
         kb.push([{ text: '🌐 Shaxsiy kabinet', web_app: { url: panelUrls[role] || panelUrls.student } }]);
     } else {
@@ -77,7 +75,7 @@ function genderKeyboard() {
         inline_keyboard: [
             [
                 { text: '👨 Erkak', callback_data: 'flow_gender_male' },
-                { text: '👩 Ayol',  callback_data: 'flow_gender_female' },
+                { text: '👩 Ayol', callback_data: 'flow_gender_female' },
             ],
             [{ text: '❌ Bekor qilish', callback_data: 'flow_cancel' }],
         ],
@@ -95,10 +93,10 @@ function leadActionsKeyboard(leadId) {
         inline_keyboard: [
             [
                 { text: '📞 Bog\'lashildi', callback_data: `lead_status_${leadId}_contacted` },
-                { text: '📅 Rejalashtir',  callback_data: `lead_status_${leadId}_scheduled` },
+                { text: '📅 Rejalashtir', callback_data: `lead_status_${leadId}_scheduled` },
             ],
             [
-                { text: '❌ Rad etish',    callback_data: `lead_status_${leadId}_rejected` },
+                { text: '❌ Rad etish', callback_data: `lead_status_${leadId}_rejected` },
                 { text: '🎓 Qabul qilish', callback_data: `lead_convert_${leadId}` },
             ],
             [{ text: '◀️ Ro\'yxatga qaytish', callback_data: 'leads_list_1' }],
@@ -108,7 +106,7 @@ function leadActionsKeyboard(leadId) {
 
 function paginationKeyboard(page, totalPages) {
     const row = [];
-    if (page > 1)          row.push({ text: '◀️ Oldingi', callback_data: `leads_list_${page - 1}` });
+    if (page > 1) row.push({ text: '◀️ Oldingi', callback_data: `leads_list_${page - 1}` });
     if (page < totalPages) row.push({ text: 'Keyingi ▶️', callback_data: `leads_list_${page + 1}` });
     return row.length ? { inline_keyboard: [row] } : null;
 }

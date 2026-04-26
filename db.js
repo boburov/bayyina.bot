@@ -6,7 +6,7 @@ function readDB() {
     try {
         const data = fs.readFileSync(DB_FILE, 'utf8');
         const parsed = JSON.parse(data);
-        if (!parsed.tokens)     parsed.tokens     = {};
+        if (!parsed.tokens) parsed.tokens = {};
         if (!parsed.knownUsers) parsed.knownUsers = [];
         return parsed;
     } catch (e) {
@@ -44,7 +44,7 @@ function saveSession(telegramId, data) {
     const s = getSessions();
     s[String(telegramId)] = {
         token: data.token,
-        role:  data.role || 'student',
+        role: data.role || 'student',
         updatedAt: new Date().toISOString()
     };
     saveSessions(s);
@@ -61,7 +61,7 @@ function removeSession(telegramId) {
 function getToken(telegramId) {
     const session = getSession(telegramId);
     if (session) return session.token;
-    
+
     const db = readDB();
     return db.tokens[String(telegramId)] || null;
 }
@@ -96,9 +96,9 @@ function markKnownLead(telegramId) {
     }
 }
 
-module.exports = { 
-    readDB, writeDB, 
-    getToken, setToken, 
+module.exports = {
+    readDB, writeDB,
+    getToken, setToken,
     getSession, saveSession, removeSession,
-    getAnyAdminToken, isKnownLead, markKnownLead 
+    getAnyAdminToken, isKnownLead, markKnownLead
 };

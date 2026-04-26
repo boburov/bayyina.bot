@@ -87,7 +87,7 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
 
 bot.onText(/\/add\s+(.+)/, async (msg, match) => {
     if (!ADMIN_IDS.includes(msg.from.id)) return;
-    const channelId = match[1].trim();
+    const channelId = match[1].trim(); w
     const db = readDB();
     if (!db.channels) db.channels = [];
     if (!db.channels.find(c => c.channelId === channelId)) {
@@ -299,7 +299,7 @@ bot.onText(/^\/leads(?:\s+(\d+))?$/, async (msg, match) => {
 
 bot.onText(/\/help/, (msg) => {
     const isAdmin = ADMIN_IDS.includes(msg.from.id);
-    let text = "📋 <b>Buyruqlar:</b>\n\n/start - Botni boshlash\n/login - CRM ga kirish";
+    let text = "📋 <b>Buyruqlar:</b>\n\n/start - Botni boshlash\n/login - Tizimga ga kirish";
     if (isAdmin) {
         text += "\n\n🛠 <b>Admin buyruqlari:</b>\n/add @kanal - Kanal qo'shish\n/remove @kanal - Kanalni o'chirish\n/list - Kanallar ro'yxati\n/leads - Leadlar ro'yxati";
     }

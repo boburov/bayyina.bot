@@ -27,10 +27,16 @@
         "event": "started_bot",
         "meta": {},
         "ts": 1777011433474
+      },
+      {
+        "telegramId": "298444246",
+        "event": "started_bot",
+        "meta": {},
+        "ts": 1777224108497
       }
     ],
     "funnel": {
-      "started_bot": 4
+      "started_bot": 5
     }
   }
 }

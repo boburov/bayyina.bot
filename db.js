@@ -8,9 +8,10 @@ function readDB() {
         const parsed = JSON.parse(data);
         if (!parsed.tokens) parsed.tokens = {};
         if (!parsed.knownUsers) parsed.knownUsers = [];
+        if (!parsed.admins) parsed.admins = [];
         return parsed;
     } catch (e) {
-        return { channels: [], tokens: {}, knownUsers: [] };
+        return { channels: [], tokens: {}, knownUsers: [], admins: [] };
     }
 }
 

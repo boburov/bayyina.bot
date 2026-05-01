@@ -21,7 +21,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon --ignore db.json --ignore '*.json' index.js"
+    "dev": "nodemon --ignore db.json --ignore '*.json' index.js",
+    "dev:student": "nodemon --ignore db.json --ignore '*.json' student.js",
+    "start:student": "node student.js"
   },
   "nodemonConfig": {
     "ignore": ["db.json", "*.json"],

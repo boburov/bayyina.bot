@@ -126,6 +126,11 @@ bot.on('message', async (msg) => {
             const { token, user } = res.data;
             const role = user?.role || 'student';
             saveSession(userId, { token, role });
+            // Save Telegram ID to server so admin can message this user
+            axios.post(`${BACKEND}/auth/link-telegram`,
+                { telegramId: String(userId) },
+                { headers: { Authorization: `Bearer ${token}` } }
+            ).catch(() => {});
             const isAdmin = ADMIN_IDS.includes(userId);
             bot.sendMessage(chatId, `✅ <b>Muvaffaqiyatli kirdingiz!</b>\n\nRol: <b>${role}</b>`, { parse_mode: 'HTML', reply_markup: mainMenuKeyboard(role, isAdmin) });
         } catch {

@@ -9,7 +9,7 @@ const bot = new TelegramBot(process.env.BOT_TOKEN, {
     polling: { interval: 1000, autoStart: true, params: { timeout: 10 } },
 });
 
-const BACKEND = process.env.BACKEND_URL || 'http://api.bayyina.org.uz/api';
+const BACKEND = process.env.BACKEND_URL || 'https://api.bayyina.org.uz/api';
 const ADMIN_IDS = process.env.ADMIN_IDS
     ? process.env.ADMIN_IDS.split(',').map(Number).filter(Boolean)
     : [];
